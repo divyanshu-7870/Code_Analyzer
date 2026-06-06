@@ -19,3 +19,14 @@ class ReviewResponse(BaseModel) :
     score : int
     summary : str
 
+class ApplyRequest(BaseModel) :
+    original_code : str
+    language : str
+    issue_desription : str
+    suggestion : str
+    fixed_code_snippet : str
+
+class ApplyResponse(BaseModel):
+    fixed_code: str
+    message: str
+    

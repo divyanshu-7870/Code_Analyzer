@@ -64,16 +64,17 @@ async def get_code_review(code: str , language : str) -> dict:
     #     system_instruction=SYSTEM_PROMPT
     # )
 
-    prompt = build_review_prompt ( code, language)
+    prompt = build_review_prompt(code, language)
 
-    try :
+    try:
         response = client.models.generate_content(
-            model = "gemini-2.5-flash",
-            contents = prompt,
-            config = types.GenerateContentConfig(
-             system_instruction = SYSTEM_PROMPT,
-             temperature = 0.1
-            ))
+            model="gemini-2.5-flash",
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT,
+                temperature=0.1,
+            ),
+        )
         raw = response.text.strip()
 
         raw = re.sub(r"```json|```", "", raw).strip()
@@ -82,16 +83,71 @@ async def get_code_review(code: str , language : str) -> dict:
 
         if "issues" not in parsed:
             raise ValueError("Missing issues key in response")
-        
+
         return parsed
     except json.JSONDecodeError:
         return {
-            "issues" : [],
-            "score" : 0,
-            "summary" : "Review failed - could not parse AI response."
+            "issues": [],
+            "score": 0,
+            "summary": "Review failed - could not parse AI response.",
         }
     except Exception as e:
         raise RuntimeError(f"Gemini API error: {str(e)}")
+
+
+
+async def apply_code_fix(
+    original_code:str,
+    language:str,
+    issue_description:str,
+    suggestion:str,
+    fixed_code_snippet:str
+) -> dict:
+    prompt = f"""
+You are a senior software Engineer. Apply the following fix to the code.
+
+ORIGINAL CODE:
+``` {language}
+{original_code}
+```
+
+ISSUE: {issue_description}
+SUGGESTION: {suggestion}
+FIXED SNIPPET: {fixed_code_snippet}
+
+STRICT RULES:
+- Return ONLY vaid JSON, no markdown , no backticks
+- Apply the fixed correctly while keeping the rest of the code unchanged
+- Return exactly this structure: 
+{{
+    "fixed_code": <the complete corrected code as string>
+    "message": <one sentence describing what was fixed>
+}}
+"""
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                temperature=0.1,
+            ),
+        )
+        raw = response.text.strip()
+        raw = re.sub(r"```json|```", "", raw).strip()
+        parsed = json.loads(raw)
+
+        if "fixed_code" not in parsed:
+            raise ValueError("Missing fixed_code in response")
+
+        return parsed
+
+    except json.JSONDecodeError:
+        return {
+            "fixed_code": original_code,
+            "message": "Fix could not be applied - returned original code.",
+        }
+    except Exception as e:
+        raise RuntimeError(f"Gemini API error : {str(e)}")
 
 
 
