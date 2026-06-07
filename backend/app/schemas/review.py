@@ -22,7 +22,7 @@ class ReviewResponse(BaseModel) :
 class ApplyRequest(BaseModel) :
     original_code : str
     language : str
-    issue_desription : str
+    issue_description : str
     suggestion : str
     fixed_code_snippet : str
 
