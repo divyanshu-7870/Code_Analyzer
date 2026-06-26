@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.routes.review import router as review_router
 from app.routes.history import router as history_router
 from app.db.database import engine, Base
-
+from app.routes.github import router as github_router
 
 Base.metadata.create_all(bind=engine)
 
@@ -23,6 +23,7 @@ app.add_middleware(
 
 app.include_router(review_router, prefix="/api")
 app.include_router(history_router, prefix="/api")
+app.include_router(github_router, prefix="/api")
 
 @app.get("/")
 def health_check():
