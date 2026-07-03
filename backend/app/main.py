@@ -28,3 +28,10 @@ app.include_router(github_router, prefix="/api")
 @app.get("/")
 def health_check():
     return {"status" : "ok", "message": "Code Analyzer API is running"}
+
+
+import os
+required_env_vars = ["GEMINI_API_KEY", "GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET"]
+for var in required_env_vars:
+    if not os.getenv(var):
+        raise RuntimeError(f"Missing required environment variable: {var}")
