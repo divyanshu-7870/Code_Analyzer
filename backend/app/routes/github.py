@@ -16,7 +16,9 @@ router = APIRouter()
 
 GITHUB_CLIENT_ID = os.getenv("GITHUB_CLIENT_ID")
 GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET")
-GITHUB_REDIRECT_URI = "http://localhost:8000/api/github/callback"
+BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000").rstrip("/")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173").rstrip("/")
+GITHUB_REDIRECT_URI = f"{BACKEND_URL}/api/github/callback"
 
 @router.get("/github/login")
 def github_login():
@@ -51,7 +53,7 @@ async def github_callback(code: str):
     access_token = token_data["access_token"]
 
     return RedirectResponse(
-        url=f"http://localhost:5173?github_token=={access_token}"
+        url=f"{FRONTEND_URL}?github_token={access_token}"
     )
 
 @router.get("/github/repos")
@@ -127,6 +129,7 @@ async def get_file_content(token: str, repo: str, path: str):
 
 
 @router.get("/github/review-file")
+@router.post("/github/review-file")
 async def review_github_file(token: str, repo: str, path: str, db: Session = Depends(get_db)):
     async with httpx.AsyncClient(timeout=30.0) as client:
         response= await client.get(
@@ -158,8 +161,6 @@ async def review_github_file(token: str, repo: str, path: str, db: Session = Dep
     db.commit()
 
     return result
-
-
 
 
 
