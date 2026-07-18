@@ -48,7 +48,9 @@ async def github_callback(code: str):
     token_data = token_response.json()
 
     if "access_token" not in token_data:
-        raise HTTPException(status_code=400, detail="Failed to get access token from Github")
+      error = token_data.get("error_description") or token_data.get("error") or "Unknown GitHub OAuth error"
+      raise HTTPException(status_code=400, detail=f"GitHub OAuth token exchange failed: {error}")
+
     
     access_token = token_data["access_token"]
 
