@@ -1,6 +1,7 @@
 import os
 import httpx
 import json
+import logging
 from fastapi import APIRouter , HTTPException
 from fastapi.responses import RedirectResponse
 from dotenv import load_dotenv
@@ -11,6 +12,8 @@ from app.models.review import Review
 from app.services.gemini import get_code_review
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -48,8 +51,16 @@ async def github_callback(code: str):
     token_data = token_response.json()
 
     if "access_token" not in token_data:
-      error = token_data.get("error_description") or token_data.get("error") or "Unknown GitHub OAuth error"
-      raise HTTPException(status_code=400, detail=f"GitHub OAuth token exchange failed: {error}")
+      error_code = token_data.get("error", "unknown_error")
+      error_description = token_data.get("error_description", "Unknown GitHub OAuth error")
+      logger.warning(
+          "GitHub OAuth token exchange failed: status=%s error=%s description=%s redirect_uri=%s",
+          token_response.status_code,
+          error_code,
+          error_description,
+          GITHUB_REDIRECT_URI,
+      )
+      raise HTTPException(status_code=400, detail=f"GitHub OAuth token exchange failed: {error_description}")
 
     
     access_token = token_data["access_token"]
@@ -163,6 +174,5 @@ async def review_github_file(token: str, repo: str, path: str, db: Session = Dep
     db.commit()
 
     return result
-
 
 
