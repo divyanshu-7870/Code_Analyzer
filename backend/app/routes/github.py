@@ -1,7 +1,9 @@
+import asyncio
 import os
 import httpx
 import json
 import logging
+import time
 from fastapi import APIRouter , HTTPException
 from fastapi.responses import RedirectResponse
 from dotenv import load_dotenv
@@ -23,10 +25,27 @@ BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000").rstrip("/")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173").rstrip("/")
 GITHUB_REDIRECT_URI = f"{BACKEND_URL}/api/github/callback"
 
+# GitHub authorization codes can only be exchanged once. Browsers and hosting
+# proxies may retry a callback after the first request has already succeeded,
+# so keep the successful redirect briefly and return it on a duplicate request.
+_oauth_callback_cache: dict[str, tuple[float, str]] = {}
+_oauth_callback_lock = asyncio.Lock()
+_OAUTH_CALLBACK_CACHE_TTL_SECONDS = 300
+
+
+def _remove_expired_callback_cache_entries(now: float) -> None:
+    expired_codes = [
+        code
+        for code, (expires_at, _) in _oauth_callback_cache.items()
+        if expires_at <= now
+    ]
+    for expired_code in expired_codes:
+        del _oauth_callback_cache[expired_code]
+
 @router.get("/github/login")
 def github_login():
     github_auth_url = (
-        f"http://github.com/login/oauth/authorize"
+        f"https://github.com/login/oauth/authorize"
         f"?client_id={GITHUB_CLIENT_ID}"
         f"&scope=repo"
         f"&redirect_uri={GITHUB_REDIRECT_URI}"
@@ -37,37 +56,42 @@ def github_login():
 
 @router.get("/github/callback")
 async def github_callback(code: str):
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        token_response = await client.post(
-            "https://github.com/login/oauth/access_token",
-            data={
-                "client_id": GITHUB_CLIENT_ID,
-                "client_secret": GITHUB_CLIENT_SECRET,
-                "code": code,
-                "redirect_uri": GITHUB_REDIRECT_URI,
-            },
-            headers={"Accept": "application/json"}
-        )
-    token_data = token_response.json()
+    async with _oauth_callback_lock:
+        now = time.monotonic()
+        _remove_expired_callback_cache_entries(now)
+        cached_result = _oauth_callback_cache.get(code)
+        if cached_result:
+            logger.info("Returning cached GitHub OAuth callback redirect for a duplicate code")
+            return RedirectResponse(url=cached_result[1])
 
-    if "access_token" not in token_data:
-      error_code = token_data.get("error", "unknown_error")
-      error_description = token_data.get("error_description", "Unknown GitHub OAuth error")
-      logger.warning(
-          "GitHub OAuth token exchange failed: status=%s error=%s description=%s redirect_uri=%s",
-          token_response.status_code,
-          error_code,
-          error_description,
-          GITHUB_REDIRECT_URI,
-      )
-      raise HTTPException(status_code=400, detail=f"GitHub OAuth token exchange failed: {error_description}")
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            token_response = await client.post(
+                "https://github.com/login/oauth/access_token",
+                data={
+                    "client_id": GITHUB_CLIENT_ID,
+                    "client_secret": GITHUB_CLIENT_SECRET,
+                    "code": code,
+                    "redirect_uri": GITHUB_REDIRECT_URI,
+                },
+                headers={"Accept": "application/json"}
+            )
+        token_data = token_response.json()
 
-    
-    access_token = token_data["access_token"]
+        if "access_token" not in token_data:
+            error_code = token_data.get("error", "unknown_error")
+            error_description = token_data.get("error_description", "Unknown GitHub OAuth error")
+            logger.warning(
+                "GitHub OAuth token exchange failed: status=%s error=%s description=%s redirect_uri=%s",
+                token_response.status_code,
+                error_code,
+                error_description,
+                GITHUB_REDIRECT_URI,
+            )
+            raise HTTPException(status_code=400, detail=f"GitHub OAuth token exchange failed: {error_description}")
 
-    return RedirectResponse(
-        url=f"{FRONTEND_URL}?github_token={access_token}"
-    )
+        redirect_url = f"{FRONTEND_URL}?github_token={token_data['access_token']}"
+        _oauth_callback_cache[code] = (now + _OAUTH_CALLBACK_CACHE_TTL_SECONDS, redirect_url)
+        return RedirectResponse(url=redirect_url)
 
 @router.get("/github/repos")
 async def get_repos(token: str):
@@ -174,5 +198,4 @@ async def review_github_file(token: str, repo: str, path: str, db: Session = Dep
     db.commit()
 
     return result
-
 
