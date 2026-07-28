@@ -4,6 +4,7 @@ import httpx
 import json
 import logging
 import time
+from urllib.parse import urlencode
 from fastapi import APIRouter , HTTPException
 from fastapi.responses import RedirectResponse
 from dotenv import load_dotenv
@@ -89,7 +90,7 @@ async def github_callback(code: str):
             )
             raise HTTPException(status_code=400, detail=f"GitHub OAuth token exchange failed: {error_description}")
 
-        redirect_url = f"{FRONTEND_URL}?github_token={token_data['access_token']}"
+        redirect_url = f"{FRONTEND_URL}/github?{urlencode({'github_token': token_data['access_token']})}"
         _oauth_callback_cache[code] = (now + _OAUTH_CALLBACK_CACHE_TTL_SECONDS, redirect_url)
         return RedirectResponse(url=redirect_url)
 
@@ -198,4 +199,3 @@ async def review_github_file(token: str, repo: str, path: str, db: Session = Dep
     db.commit()
 
     return result
-

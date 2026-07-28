@@ -16,10 +16,16 @@ import { fetchGithubFile, fetchGithubRepos, fetchGithubTree, reviewGithubFile } 
 import type { GithubFileContent, GithubRepository, GithubTreeItem } from '../types/github'
 import type { ReviewResponse } from '../types/review'
 import { getLanguageFromPath } from '../utils/fileLanguage'
-import { clearGithubToken, getStoredGithubToken } from '../utils/githubToken'
+import {
+  clearGithubToken,
+  getStoredGithubToken,
+  readGithubTokenFromUrl,
+  removeGithubTokenFromUrl,
+  storeGithubToken,
+} from '../utils/githubToken'
 
 export function GitHubPage() {
-  const [token, setToken] = useState(() => getStoredGithubToken())
+  const [token, setToken] = useState(() => readGithubTokenFromUrl() ?? getStoredGithubToken())
   const [repos, setRepos] = useState<GithubRepository[]>([])
   const [selectedRepo, setSelectedRepo] = useState<GithubRepository | null>(null)
   const [tree, setTree] = useState<GithubTreeItem[]>([])
@@ -32,6 +38,15 @@ export function GitHubPage() {
   const [error, setError] = useState<string | null>(null)
 
   const language = useMemo(() => getLanguageFromPath(selectedFile?.path ?? ''), [selectedFile?.path])
+
+  useEffect(() => {
+    const tokenFromUrl = readGithubTokenFromUrl()
+    if (!tokenFromUrl) return
+
+    storeGithubToken(tokenFromUrl)
+    setToken(tokenFromUrl)
+    removeGithubTokenFromUrl()
+  }, [])
 
   useEffect(() => {
     if (!token) return
