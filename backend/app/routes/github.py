@@ -22,8 +22,8 @@ router = APIRouter()
 
 GITHUB_CLIENT_ID = os.getenv("GITHUB_CLIENT_ID")
 GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET")
-BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000").rstrip("/")
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173").rstrip("/")
+BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000").strip().rstrip("/")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173").strip().rstrip("/")
 GITHUB_REDIRECT_URI = f"{BACKEND_URL}/api/github/callback"
 
 # GitHub authorization codes can only be exchanged once. Browsers and hosting
